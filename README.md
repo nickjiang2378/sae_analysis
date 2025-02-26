@@ -5,7 +5,7 @@ This repository contains the code for using sparse autoencoders to analyze large
 ## Installation
 
 ```
-conda create --name sae_analysis python=3.11
+conda env create -f environment.yml
 conda activate sae_analysis
 pip install -r requirements.txt
 ```
