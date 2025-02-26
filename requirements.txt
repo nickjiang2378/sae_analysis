@@ -1,0 +1,6 @@
+goodfire==0.3.4
+python-dotenv==1.0.1
+pandas==2.2.3
+scikit-learn==1.6.1
+ipykernel
+tqdm==4.67.1
