@@ -54,13 +54,15 @@ class DatasetFeatureActivations():
         """
         Get the feature activations for all samples.
 
-        :param feature_activation_type: Type of feature activation ('max' or 'mean')
+        :param feature_activation_type: Type of feature activation ('max', 'mean', or 'sum')
         :return: Numpy array of feature activations
         """
         if feature_activation_type == "max":
             return np.concatenate([feature_activation.get_max_activations() for feature_activation in self._feature_activations])
         elif feature_activation_type == "mean":
             return np.concatenate([feature_activation.get_mean_activations() for feature_activation in self._feature_activations])
+        elif feature_activation_type == "sum":
+            return np.concatenate([feature_activation.get_sum_activations() for feature_activation in self._feature_activations])
         else:
             raise ValueError(f"Unsupported feature activation type: {feature_activation_type}")
 
@@ -85,7 +87,7 @@ class DatasetFeatureActivations():
         Calculate the difference in feature activations between two datasets.
 
         :param other: Another DatasetFeatureActivations instance
-        :param feature_activation_type: Type of feature activation ('max' or 'mean')
+        :param feature_activation_type: Type of feature activation ('max', 'mean', or 'sum')
         :return: List of tuples containing feature labels and their differences
         """
         if not isinstance(other, DatasetFeatureActivations):
@@ -105,7 +107,7 @@ class DatasetFeatureActivations():
         Sort data samples by specified features and activation type.
 
         :param features: List of feature indices to sort by
-        :param feature_activation_type: Type of feature activation ('max' or 'mean')
+        :param feature_activation_type: Type of feature activation ('max', 'mean', or 'sum')
         :return: List of sorted data samples
         """
         feature_activations = self.feature_activations(feature_activation_type)
@@ -153,7 +155,7 @@ class DatasetFeatureActivations():
 
 
 class FeatureActivation():
-    def __init__(self, text_sample, client = None, variant = None, mean_activations = None, max_activations = None):
+    def __init__(self, text_sample, client = None, variant = None, mean_activations = None, max_activations = None, sum_activations = None):
         """
         Initialize a FeatureActivation instance.
 
@@ -162,21 +164,24 @@ class FeatureActivation():
         :param variant: Goodfire variant (8b or 70b)
         :param mean_activations: Optional precomputed mean activations
         :param max_activations: Optional precomputed max activations
+        :param sum_activations: Optional precomputed sum activations
         """
         self.text_sample = text_sample
 
-        if mean_activations is None or max_activations is None:
+        if mean_activations is None or max_activations is None or sum_activations is None:
             if client is None or variant is None:
-                raise ValueError("Client and variant must be provided if mean_activations and max_activations are not provided")
+                raise ValueError("Client and variant must be provided if mean_activations, max_activations, and sum_activations are not provided")
             matrix = client.features.activations(
               messages=[{"role": "user", "content": text_sample}],
               model=variant,
             )
             self.mean_activations = csr_matrix(matrix.mean(axis = 0)) # most feature activations are 0
             self.max_activations = csr_matrix(matrix.max(axis = 0))
+            self.sum_activations = csr_matrix(matrix.sum(axis = 0))
         else:
             self.mean_activations = mean_activations
             self.max_activations = max_activations
+            self.sum_activations = sum_activations
 
     def get_mean_activations(self):
         """
@@ -194,17 +199,25 @@ class FeatureActivation():
         """
         return self.max_activations.toarray()
 
+    def get_sum_activations(self):
+        """
+        Get the sum activations as a dense array.
+
+        :return: Numpy array of sum activations
+        """
+        return self.sum_activations.toarray()
+
     def __repr__(self):
         return f"FeatureActivation('{self.text_sample[:SAMPLE_TRUNCATION_LENGTH] + '...' if len(self.text_sample) > SAMPLE_TRUNCATION_LENGTH else self.text_sample}')"
 
     def __add__(self, other):
         if isinstance(other, FeatureActivation):
-            return FeatureActivation(self.text_sample, mean_activations = self.mean_activations + other.mean_activations, max_activations = self.max_activations + other.max_activations)
+            return FeatureActivation(self.text_sample, mean_activations = self.mean_activations + other.mean_activations, max_activations = self.max_activations + other.max_activations, sum_activations = self.sum_activations + other.sum_activations)
         else:
             raise ValueError("Unsupported operand type(s) for +: 'FeatureActivation' and '{}'".format(type(other)))
 
     def __sub__(self, other):
         if isinstance(other, FeatureActivation):
-            return FeatureActivation(self.text_sample, mean_activations = self.mean_activations - other.mean_activations, max_activations = self.max_activations - other.max_activations)
+            return FeatureActivation(self.text_sample, mean_activations = self.mean_activations - other.mean_activations, max_activations = self.max_activations - other.max_activations, sum_activations = self.sum_activations - other.sum_activations)
         else:
             raise ValueError("Unsupported operand type(s) for -: 'FeatureActivation' and '{}'".format(type(other)))
